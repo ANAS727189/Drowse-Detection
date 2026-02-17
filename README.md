@@ -1,9 +1,8 @@
 # Driver Monitor: Drowsiness + Yawn Detection
 
-This is my customized version of a real-time driver monitoring project.  
 It analyzes live video from a webcam, estimates facial landmarks, and raises alerts when signs of drowsiness or fatigue are detected.
 
-## What Makes This Version Different
+## What Makes This Different
 
 - Modular codebase (`driver_monitor/`) instead of one large script
 - Dashboard-style UI with live metrics (EAR, mouth opening, yaw, pitch, FPS)
