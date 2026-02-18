@@ -56,6 +56,11 @@ pip install -r requirements.txt
 python drowsiness_yawn.py --webcam 0 --alarm Alert.wav
 ```
 
+Use a trained `.h5` model:
+```bash
+python drowsiness_yawn.py --webcam 0 --alarm Alert.wav --model-h5 drowsiness_model.h5 --model-drowsy-class 0 --model-threshold 0.5
+```
+
 5. Optional fullscreen start.
 ```bash
 python drowsiness_yawn.py --webcam 0 --alarm Alert.wav --fullscreen
@@ -68,7 +73,30 @@ python drowsiness_yawn.py --webcam 0 --alarm Alert.wav --fullscreen
 - `--ear-threshold` eye-closure threshold
 - `--ear-frames` consecutive low-EAR frames before drowsiness alert
 - `--yawn-threshold` mouth-opening threshold
+- `--model-h5` path to trained Keras `.h5` model
+- `--model-threshold` score threshold (0-1) for model drowsy alert
+- `--model-drowsy-class` output class index treated as drowsy (`0` for Closed/Open binary models)
+- `--model-full-frame` disable eye-crop inference and run image model on full frame
 - `--fullscreen` start in fullscreen mode
+
+## `.h5` Model Input Support
+
+The app auto-detects your model input type:
+
+- Rank-2 input (`[batch, features]`): expects exactly 4 features in this order:
+  `ear, mouth_open, pitch, yaw`
+- Rank-4 input (`[batch, height, width, channels]`): uses full frame resized to model input size
+  (`channels` must be `1` or `3`)
+
+For eye-state models trained on cropped eyes (Open/Closed), image mode defaults to MediaPipe eye crops,
+then averages left/right-eye drowsy scores.
+
+Class mapping note:
+- `image_dataset_from_directory(..., label_mode='binary')` assigns index based on sorted folder names.
+- If your folders are `Closed` and `Open`, class index is usually `Closed=0`, `Open=1`.
+- In that case keep `--model-drowsy-class 0`.
+
+If no `--model-h5` is passed, the app uses only threshold-based logic (EAR + yawn + head pose).
 
 ## Detection Flow
 

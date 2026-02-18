@@ -15,6 +15,8 @@ class AnalysisResult:
     pitch: float
     yaw: float
     nose_point: tuple[int, int]
+    left_eye_box: Optional[tuple[int, int, int, int]]
+    right_eye_box: Optional[tuple[int, int, int, int]]
 
 
 class FaceAnalyzer:
@@ -87,6 +89,34 @@ class FaceAnalyzer:
         yaw = float(angles[1]) * 360.0
         return pitch, yaw, nose_point
 
+    def _eye_box(
+        self,
+        landmarks,
+        eye_indices: tuple[int, ...],
+        width: int,
+        height: int,
+        padding_ratio: float = 0.45,
+    ) -> Optional[tuple[int, int, int, int]]:
+        coords = np.array(
+            [(landmarks[i].x * width, landmarks[i].y * height) for i in eye_indices],
+            dtype=np.float64,
+        )
+        min_xy = coords.min(axis=0)
+        max_xy = coords.max(axis=0)
+
+        eye_w = max(float(max_xy[0] - min_xy[0]), 1.0)
+        eye_h = max(float(max_xy[1] - min_xy[1]), 1.0)
+        pad_x = int(eye_w * padding_ratio)
+        pad_y = int(eye_h * padding_ratio) + 2
+
+        x1 = max(int(min_xy[0]) - pad_x, 0)
+        y1 = max(int(min_xy[1]) - pad_y, 0)
+        x2 = min(int(max_xy[0]) + pad_x, width)
+        y2 = min(int(max_xy[1]) + pad_y, height)
+        if x2 - x1 < 2 or y2 - y1 < 2:
+            return None
+        return (x1, y1, x2, y2)
+
     def analyze(self, frame: np.ndarray) -> Optional[AnalysisResult]:
         height, width = frame.shape[:2]
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -104,11 +134,14 @@ class FaceAnalyzer:
         mouth_open = self._distance(top_lip, bottom_lip)
 
         pitch, yaw, nose_point = self._head_pose(landmarks, width, height)
+        left_eye_box = self._eye_box(landmarks, self.LEFT_EYE, width, height)
+        right_eye_box = self._eye_box(landmarks, self.RIGHT_EYE, width, height)
         return AnalysisResult(
             ear=ear,
             mouth_open=mouth_open,
             pitch=pitch,
             yaw=yaw,
             nose_point=nose_point,
+            left_eye_box=left_eye_box,
+            right_eye_box=right_eye_box,
         )
-

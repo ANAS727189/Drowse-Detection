@@ -8,6 +8,7 @@ import cv2
 from .analysis import AnalysisResult, FaceAnalyzer
 from .audio import AlarmPlayer
 from .config import MonitorConfig, WebcamSource
+from .model_inference import H5DrowsinessModel, ModelPrediction
 from .ui import DashboardRenderer, UISnapshot
 
 
@@ -21,6 +22,24 @@ class DriverMonitorApp:
         self.analyzer = FaceAnalyzer()
         self.alarm = AlarmPlayer(config.alarm_path)
         self.renderer = DashboardRenderer(config)
+        self.model: H5DrowsinessModel | None = None
+        self.last_model_prediction: ModelPrediction | None = None
+        if config.model_h5_path:
+            self.model = H5DrowsinessModel(
+                config.model_h5_path,
+                config.model_threshold,
+                config.model_drowsy_class,
+                config.model_eye_crops,
+            )
+            print(
+                "-> Loaded model:",
+                config.model_h5_path,
+                (
+                    f"(mode={self.model.mode}, input={self.model.input_shape}, "
+                    f"drowsy_class={self.model.drowsy_class}, eye_crops={self.model.use_eye_crops}, "
+                    f"threshold={self.model.threshold:.2f})"
+                ),
+            )
 
         self.blink_counter = 0
         self.fps = 0.0
@@ -103,6 +122,23 @@ class DriverMonitorApp:
             self.fps = (self.fps * 0.9) + (instant_fps * 0.1)
         self.last_frame_time = now
 
+    def _apply_model_prediction(
+        self,
+        snapshot: UISnapshot,
+        prediction: ModelPrediction | None,
+    ) -> None:
+        self.last_model_prediction = prediction
+        if prediction is None:
+            return
+
+        if prediction.is_drowsy:
+            snapshot.drowsy = True
+            snapshot.status_text = f"MODEL DROWSY ({prediction.score:.2f})"
+            snapshot.status_color = (0, 80, 255)
+        elif snapshot.status_text == "ACTIVE":
+            snapshot.status_text = f"MODEL OK ({prediction.score:.2f})"
+            snapshot.status_color = (60, 200, 60)
+
     def _toggle_fullscreen(self) -> None:
         self.fullscreen = not self.fullscreen
         mode = cv2.WINDOW_FULLSCREEN if self.fullscreen else cv2.WINDOW_NORMAL
@@ -134,6 +170,14 @@ class DriverMonitorApp:
                 frame = cv2.flip(frame, 1)
                 result = self.analyzer.analyze(frame)
                 snapshot = self._snapshot_from_result(result)
+                if self.model is not None:
+                    try:
+                        prediction = self.model.predict(frame, result)
+                        self._apply_model_prediction(snapshot, prediction)
+                    except Exception as exc:
+                        print(f"-> Model inference disabled after error: {exc}")
+                        self.model = None
+                        self.last_model_prediction = None
                 if snapshot.drowsy:
                     self.alarm.trigger()
 
@@ -172,6 +216,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Consecutive low-EAR frames before drowsiness alert",
     )
     parser.add_argument("--yawn-threshold", type=float, default=25.0, help="Mouth opening threshold")
+    parser.add_argument("--model-h5", default=None, help="Path to trained Keras .h5 model")
+    parser.add_argument(
+        "--model-threshold",
+        type=float,
+        default=0.5,
+        help="Probability threshold above which model output is treated as drowsy",
+    )
+    parser.add_argument(
+        "--model-drowsy-class",
+        type=int,
+        default=0,
+        help="Model output class index to treat as drowsy (for binary Closed/Open models use 0)",
+    )
+    parser.add_argument(
+        "--model-full-frame",
+        action="store_true",
+        help="Use full frame for image model inference instead of landmark-based eye crops",
+    )
     parser.add_argument("--fullscreen", action="store_true", help="Start window in fullscreen mode")
     return parser
 
@@ -184,6 +246,10 @@ def main() -> None:
         ear_threshold=args.ear_threshold,
         ear_frames=args.ear_frames,
         yawn_threshold=args.yawn_threshold,
+        model_h5_path=args.model_h5,
+        model_threshold=args.model_threshold,
+        model_drowsy_class=args.model_drowsy_class,
+        model_eye_crops=not args.model_full_frame,
         start_fullscreen=args.fullscreen,
     )
     app = DriverMonitorApp(config)
