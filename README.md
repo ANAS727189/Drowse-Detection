@@ -15,9 +15,12 @@ It analyzes live video from a webcam, estimates facial landmarks, and raises ale
 ## Tech Stack
 
 - [OpenCV](https://opencv.org/) for camera input and rendering
+- [TensorFlow / Keras](https://www.tensorflow.org/) for `.h5` model inference
 - [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) for face landmarks
 - [NumPy](http://www.numpy.org/) for numeric operations
+- [playsound](https://pypi.org/project/playsound/) for alarm playback
 - [imutils](https://github.com/jrosebr1/imutils) utilities for OpenCV workflows
+
 
 ## Project Layout
 
